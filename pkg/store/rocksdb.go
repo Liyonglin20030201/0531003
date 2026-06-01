@@ -17,6 +17,7 @@ const (
 	CFNamespaces     = "namespaces"
 	CFRaftLog        = "raft_log"
 	CFRaftStable     = "raft_stable"
+	CFAuditLog       = "audit_log"
 )
 
 var allColumnFamilies = []string{
@@ -26,6 +27,7 @@ var allColumnFamilies = []string{
 	CFNamespaces,
 	CFRaftLog,
 	CFRaftStable,
+	CFAuditLog,
 }
 
 var ErrKeyNotFound = errors.New("key not found")

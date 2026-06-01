@@ -11,6 +11,7 @@ type NodeConfig struct {
 	NodeID    string `yaml:"node_id"`
 	RaftAddr  string `yaml:"raft_addr"`
 	GRPCAddr  string `yaml:"grpc_addr"`
+	HTTPAddr  string `yaml:"http_addr"`
 	DataDir   string `yaml:"data_dir"`
 	Bootstrap bool   `yaml:"bootstrap"`
 
@@ -32,6 +33,7 @@ func DefaultConfig() *NodeConfig {
 		NodeID:            "node1",
 		RaftAddr:          "localhost:7000",
 		GRPCAddr:          "localhost:8000",
+		HTTPAddr:          "localhost:9000",
 		DataDir:           "./data",
 		Bootstrap:         false,
 		SnapshotInterval:  120,

@@ -9,10 +9,12 @@ services:
       - "--id=node1"
       - "--raft-addr=node1:7000"
       - "--grpc-addr=0.0.0.0:8000"
+      - "--http-addr=0.0.0.0:9000"
       - "--data-dir=/data"
       - "--bootstrap"
     ports:
       - "8000:8000"
+      - "9000:9000"
     volumes:
       - node1-data:/data
     networks:
@@ -26,9 +28,11 @@ services:
       - "--id=node2"
       - "--raft-addr=node2:7000"
       - "--grpc-addr=0.0.0.0:8000"
+      - "--http-addr=0.0.0.0:9000"
       - "--data-dir=/data"
     ports:
       - "8001:8000"
+      - "9001:9000"
     volumes:
       - node2-data:/data
     networks:
@@ -44,9 +48,11 @@ services:
       - "--id=node3"
       - "--raft-addr=node3:7000"
       - "--grpc-addr=0.0.0.0:8000"
+      - "--http-addr=0.0.0.0:9000"
       - "--data-dir=/data"
     ports:
       - "8002:8000"
+      - "9002:9000"
     volumes:
       - node3-data:/data
     networks:

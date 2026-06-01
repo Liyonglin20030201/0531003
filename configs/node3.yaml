@@ -1,6 +1,7 @@
 node_id: node3
 raft_addr: "localhost:7002"
 grpc_addr: "localhost:8002"
+http_addr: "localhost:9002"
 data_dir: "./data/node3"
 bootstrap: false
 
