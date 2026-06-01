@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -79,8 +80,11 @@ func restoreFromSnapshot(s *store.RocksDBStore, rc io.Reader) error {
 	restoreDir := filepath.Join(filepath.Dir(s.DataDir()), "restore-tmp")
 	os.RemoveAll(restoreDir)
 	if err := os.MkdirAll(restoreDir, 0755); err != nil {
+		log.Printf("[FSM Restore] failed to create restore temp dir %s: %v", restoreDir, err)
 		return fmt.Errorf("create restore dir: %w", err)
 	}
+
+	log.Printf("[FSM Restore] extracting snapshot to temp dir: %s", restoreDir)
 
 	tr := tar.NewReader(rc)
 	for {
@@ -89,6 +93,7 @@ func restoreFromSnapshot(s *store.RocksDBStore, rc io.Reader) error {
 			break
 		}
 		if err != nil {
+			log.Printf("[FSM Restore] failed to read tar entry: %v", err)
 			os.RemoveAll(restoreDir)
 			return fmt.Errorf("read tar header: %w", err)
 		}
@@ -98,21 +103,25 @@ func restoreFromSnapshot(s *store.RocksDBStore, rc io.Reader) error {
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0755); err != nil {
+				log.Printf("[FSM Restore] failed to create directory %s: %v", target, err)
 				os.RemoveAll(restoreDir)
 				return err
 			}
 		case tar.TypeReg:
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+				log.Printf("[FSM Restore] failed to create parent dir for %s: %v", target, err)
 				os.RemoveAll(restoreDir)
 				return err
 			}
 			file, err := os.Create(target)
 			if err != nil {
+				log.Printf("[FSM Restore] failed to create file %s: %v", target, err)
 				os.RemoveAll(restoreDir)
 				return err
 			}
 			if _, err := io.Copy(file, tr); err != nil {
 				file.Close()
+				log.Printf("[FSM Restore] failed to write file %s: %v", target, err)
 				os.RemoveAll(restoreDir)
 				return err
 			}
@@ -120,11 +129,15 @@ func restoreFromSnapshot(s *store.RocksDBStore, rc io.Reader) error {
 		}
 	}
 
+	log.Printf("[FSM Restore] snapshot extracted, replacing database at %s", s.DataDir())
+
 	// Close current DB, replace data directory with snapshot, reopen
 	if err := s.ReplaceFromDir(restoreDir); err != nil {
+		log.Printf("[FSM Restore] FATAL: database replacement failed: %v", err)
 		os.RemoveAll(restoreDir)
 		return fmt.Errorf("replace db from snapshot: %w", err)
 	}
 
+	log.Printf("[FSM Restore] restore completed successfully")
 	return nil
 }

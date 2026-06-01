@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 
@@ -154,6 +155,8 @@ func (s *RocksDBStore) Close() {
 // moves newDataDir into its place, and reopens the DB. This is used
 // during snapshot restore to atomically swap in a new dataset.
 func (s *RocksDBStore) ReplaceFromDir(newDataDir string) error {
+	log.Printf("[RocksDBStore] starting snapshot restore, new data source: %s, target: %s", newDataDir, s.dataDir)
+
 	// 1. Close current DB and release all handles
 	s.ro.Destroy()
 	s.wo.Destroy()
@@ -161,26 +164,33 @@ func (s *RocksDBStore) ReplaceFromDir(newDataDir string) error {
 		cfh.Destroy()
 	}
 	s.db.Close()
+	log.Printf("[RocksDBStore] closed current database for restore")
 
 	// 2. Remove existing data directory
 	if err := os.RemoveAll(s.dataDir); err != nil {
+		log.Printf("[RocksDBStore] FATAL: failed to remove old data dir %s: %v", s.dataDir, err)
 		return fmt.Errorf("remove old data dir: %w", err)
 	}
 
 	// 3. Move snapshot data into the data directory path
 	if err := os.Rename(newDataDir, s.dataDir); err != nil {
+		log.Printf("[RocksDBStore] FATAL: failed to move snapshot %s -> %s: %v", newDataDir, s.dataDir, err)
 		return fmt.Errorf("move snapshot to data dir: %w", err)
 	}
 
 	// 4. Reopen DB with all column families
 	if err := s.reopen(); err != nil {
+		log.Printf("[RocksDBStore] FATAL: failed to reopen database at %s after restore: %v", s.dataDir, err)
 		return fmt.Errorf("reopen db after restore: %w", err)
 	}
 
+	log.Printf("[RocksDBStore] snapshot restore completed successfully, db reopened at %s", s.dataDir)
 	return nil
 }
 
 func (s *RocksDBStore) reopen() error {
+	log.Printf("[RocksDBStore] reopening database at %s with column families: %v", s.dataDir, allColumnFamilies)
+
 	bbto := grocksdb.NewDefaultBlockBasedTableOptions()
 	bbto.SetBlockCache(grocksdb.NewLRUCache(256 * 1024 * 1024))
 	bbto.SetFilterPolicy(grocksdb.NewBloomFilter(10))
@@ -197,6 +207,7 @@ func (s *RocksDBStore) reopen() error {
 
 	db, cfHandles, err := grocksdb.OpenDbColumnFamilies(opts, s.dataDir, allColumnFamilies, cfOpts)
 	if err != nil {
+		log.Printf("[RocksDBStore] ERROR: OpenDbColumnFamilies failed at %s: %v", s.dataDir, err)
 		return err
 	}
 
@@ -209,5 +220,7 @@ func (s *RocksDBStore) reopen() error {
 	s.cfhs = cfhs
 	s.ro = grocksdb.NewDefaultReadOptions()
 	s.wo = grocksdb.NewDefaultWriteOptions()
+
+	log.Printf("[RocksDBStore] database reopened successfully at %s", s.dataDir)
 	return nil
 }
