@@ -4,7 +4,9 @@ import (
 	"context"
 	"time"
 
+	"github.com/YonglinLi/config-center/internal/encoding"
 	"github.com/YonglinLi/config-center/pkg/fsm"
+	"github.com/YonglinLi/config-center/pkg/store"
 )
 
 const DefaultTimeout = 30 * time.Second
@@ -20,17 +22,30 @@ type ConfigUpdate struct {
 	UpdatedAt   int64  `json:"updated_at"`
 }
 
-type Hub struct {
-	watcherHub *fsm.WatcherHub
+type PollResult struct {
+	Changed bool          `json:"changed"`
+	Update  *ConfigUpdate `json:"update,omitempty"`
+	Current *VersionInfo  `json:"current"`
 }
 
-func NewHub(watcherHub *fsm.WatcherHub) *Hub {
+type VersionInfo struct {
+	Version   uint64 `json:"version"`
+	UpdatedAt int64  `json:"updated_at,omitempty"`
+}
+
+type Hub struct {
+	watcherHub *fsm.WatcherHub
+	store      *store.RocksDBStore
+}
+
+func NewHub(watcherHub *fsm.WatcherHub, s *store.RocksDBStore) *Hub {
 	return &Hub{
 		watcherHub: watcherHub,
+		store:      s,
 	}
 }
 
-func (h *Hub) Subscribe(ctx context.Context, env, namespace, key string, timeout time.Duration) (*ConfigUpdate, error) {
+func (h *Hub) Subscribe(ctx context.Context, env, namespace, key string, timeout time.Duration) (*PollResult, error) {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
@@ -44,15 +59,20 @@ func (h *Hub) Subscribe(ctx context.Context, env, namespace, key string, timeout
 	select {
 	case event, ok := <-ch:
 		if !ok {
-			return nil, nil
+			return h.buildTimeoutResult(env, namespace, key), nil
 		}
-		return eventToUpdate(event), nil
+		update := eventToUpdate(event)
+		return &PollResult{
+			Changed: true,
+			Update:  update,
+			Current: &VersionInfo{Version: update.Version, UpdatedAt: update.UpdatedAt},
+		}, nil
 	case <-ctx.Done():
-		return nil, nil
+		return h.buildTimeoutResult(env, namespace, key), nil
 	}
 }
 
-func (h *Hub) SubscribeMulti(ctx context.Context, keys []WatchKey, timeout time.Duration) ([]*ConfigUpdate, error) {
+func (h *Hub) SubscribeMulti(ctx context.Context, keys []WatchKey, timeout time.Duration) (*MultiPollResult, error) {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
@@ -85,16 +105,59 @@ func (h *Hub) SubscribeMulti(ctx context.Context, keys []WatchKey, timeout time.
 
 	select {
 	case update := <-merged:
-		return []*ConfigUpdate{update}, nil
+		return &MultiPollResult{
+			Changed: true,
+			Updates: []*ConfigUpdate{update},
+			Versions: h.buildMultiVersions(keys),
+		}, nil
 	case <-ctx.Done():
-		return nil, nil
+		return &MultiPollResult{
+			Changed:  false,
+			Versions: h.buildMultiVersions(keys),
+		}, nil
 	}
+}
+
+type MultiPollResult struct {
+	Changed  bool                    `json:"changed"`
+	Updates  []*ConfigUpdate         `json:"updates,omitempty"`
+	Versions map[string]*VersionInfo `json:"versions"`
 }
 
 type WatchKey struct {
 	Environment string `json:"environment"`
 	Namespace   string `json:"namespace"`
 	Key         string `json:"key"`
+}
+
+func (h *Hub) buildTimeoutResult(env, namespace, key string) *PollResult {
+	vi := h.queryCurrentVersion(env, namespace, key)
+	return &PollResult{
+		Changed: false,
+		Current: vi,
+	}
+}
+
+func (h *Hub) buildMultiVersions(keys []WatchKey) map[string]*VersionInfo {
+	versions := make(map[string]*VersionInfo, len(keys))
+	for _, k := range keys {
+		compositeKey := k.Environment + ":" + k.Namespace + ":" + k.Key
+		versions[compositeKey] = h.queryCurrentVersion(k.Environment, k.Namespace, k.Key)
+	}
+	return versions
+}
+
+func (h *Hub) queryCurrentVersion(env, namespace, key string) *VersionInfo {
+	baseKey := env + ":" + namespace + ":" + key
+	data, err := h.store.GetCF(store.CFDefault, []byte(baseKey))
+	if err != nil {
+		return &VersionInfo{Version: 0}
+	}
+	var entry fsm.ConfigEntry
+	if err := encoding.Decode(data, &entry); err != nil {
+		return &VersionInfo{Version: 0}
+	}
+	return &VersionInfo{Version: entry.Version, UpdatedAt: entry.UpdatedAt}
 }
 
 func eventToUpdate(event *fsm.WatchEvent) *ConfigUpdate {

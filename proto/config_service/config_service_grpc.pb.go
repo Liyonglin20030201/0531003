@@ -88,12 +88,13 @@ type GetConfigResponse struct {
 }
 
 type PutConfigRequest struct {
-	Namespace   string      `json:"namespace,omitempty"`
-	Environment Environment `json:"environment,omitempty"`
-	Key         string      `json:"key,omitempty"`
-	Value       string      `json:"value,omitempty"`
-	UpdatedBy   string      `json:"updated_by,omitempty"`
-	Comment     string      `json:"comment,omitempty"`
+	Namespace     string      `json:"namespace,omitempty"`
+	Environment   Environment `json:"environment,omitempty"`
+	Key           string      `json:"key,omitempty"`
+	Value         string      `json:"value,omitempty"`
+	UpdatedBy     string      `json:"updated_by,omitempty"`
+	Comment       string      `json:"comment,omitempty"`
+	ExpectVersion uint64      `json:"expect_version,omitempty"`
 }
 
 type PutConfigResponse struct {
@@ -101,10 +102,11 @@ type PutConfigResponse struct {
 }
 
 type DeleteConfigRequest struct {
-	Namespace   string      `json:"namespace,omitempty"`
-	Environment Environment `json:"environment,omitempty"`
-	Key         string      `json:"key,omitempty"`
-	Comment     string      `json:"comment,omitempty"`
+	Namespace     string      `json:"namespace,omitempty"`
+	Environment   Environment `json:"environment,omitempty"`
+	Key           string      `json:"key,omitempty"`
+	Comment       string      `json:"comment,omitempty"`
+	ExpectVersion uint64      `json:"expect_version,omitempty"`
 }
 
 type DeleteConfigResponse struct {
@@ -153,6 +155,7 @@ type RollbackConfigRequest struct {
 	Environment   Environment `json:"environment,omitempty"`
 	Key           string      `json:"key,omitempty"`
 	TargetVersion uint64      `json:"target_version,omitempty"`
+	ExpectVersion uint64      `json:"expect_version,omitempty"`
 	UpdatedBy     string      `json:"updated_by,omitempty"`
 }
 

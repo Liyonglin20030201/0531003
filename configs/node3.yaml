@@ -15,3 +15,10 @@ snapshot_interval: 120
 snapshot_threshold: 8192
 heartbeat_timeout: 1000ms
 election_timeout: 1000ms
+
+auth:
+  admin_tokens:
+    - "admin-secret-token-change-me"
+  app_keys:
+    - "app-key-001"
+    - "app-key-002"

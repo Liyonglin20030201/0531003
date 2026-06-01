@@ -138,6 +138,14 @@ func (f *ConfigFSM) applyPutConfig(cmd *Command) *CommandResponse {
 	baseKey := buildKey(cmd.Environment, cmd.Namespace, cmd.Key)
 
 	currentVersion := f.getVersionCounter(baseKey)
+
+	if cmd.ExpectVersion > 0 && currentVersion != cmd.ExpectVersion {
+		return &CommandResponse{
+			Error:          ErrVersionConflict,
+			CurrentVersion: currentVersion,
+		}
+	}
+
 	newVersion := currentVersion + 1
 
 	now := time.Now().UnixNano()
@@ -181,6 +189,14 @@ func (f *ConfigFSM) applyDeleteConfig(cmd *Command) *CommandResponse {
 	baseKey := buildKey(cmd.Environment, cmd.Namespace, cmd.Key)
 
 	currentVersion := f.getVersionCounter(baseKey)
+
+	if cmd.ExpectVersion > 0 && currentVersion != cmd.ExpectVersion {
+		return &CommandResponse{
+			Error:          ErrVersionConflict,
+			CurrentVersion: currentVersion,
+		}
+	}
+
 	newVersion := currentVersion + 1
 
 	now := time.Now().UnixNano()

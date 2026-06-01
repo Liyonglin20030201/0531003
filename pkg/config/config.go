@@ -21,6 +21,13 @@ type NodeConfig struct {
 	SnapshotThreshold int           `yaml:"snapshot_threshold"`
 	HeartbeatTimeout  time.Duration `yaml:"heartbeat_timeout"`
 	ElectionTimeout   time.Duration `yaml:"election_timeout"`
+
+	Auth AuthConfig `yaml:"auth"`
+}
+
+type AuthConfig struct {
+	AdminTokens []string `yaml:"admin_tokens"`
+	AppKeys     []string `yaml:"app_keys"`
 }
 
 type PeerConfig struct {

@@ -98,12 +98,13 @@ func (s *Server) adminDeleteNamespace(w http.ResponseWriter, r *http.Request) {
 // --- Config CRUD ---
 
 type PutConfigReq struct {
-	Environment string `json:"environment"`
-	Namespace   string `json:"namespace"`
-	Key         string `json:"key"`
-	Value       string `json:"value"`
-	Operator    string `json:"operator"`
-	Comment     string `json:"comment"`
+	Environment   string `json:"environment"`
+	Namespace     string `json:"namespace"`
+	Key           string `json:"key"`
+	Value         string `json:"value"`
+	Operator      string `json:"operator"`
+	Comment       string `json:"comment"`
+	ExpectVersion uint64 `json:"expect_version,omitempty"`
 }
 
 func (s *Server) adminPutConfig(w http.ResponseWriter, r *http.Request) {
@@ -123,13 +124,14 @@ func (s *Server) adminPutConfig(w http.ResponseWriter, r *http.Request) {
 	oldValue := s.getCurrentValue(req.Environment, req.Namespace, req.Key)
 
 	cmd := &fsm.Command{
-		Type:        fsm.CmdPutConfig,
-		Namespace:   req.Namespace,
-		Environment: req.Environment,
-		Key:         req.Key,
-		Value:       req.Value,
-		UpdatedBy:   req.Operator,
-		Comment:     req.Comment,
+		Type:          fsm.CmdPutConfig,
+		Namespace:     req.Namespace,
+		Environment:   req.Environment,
+		Key:           req.Key,
+		Value:         req.Value,
+		UpdatedBy:     req.Operator,
+		Comment:       req.Comment,
+		ExpectVersion: req.ExpectVersion,
 	}
 
 	resp, err := s.node.Apply(cmd, 5*time.Second)
@@ -138,6 +140,15 @@ func (s *Server) adminPutConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if resp.Error != nil {
+		if resp.Error == fsm.ErrVersionConflict {
+			writeJSON(w, http.StatusConflict, map[string]interface{}{
+				"error":           "version conflict",
+				"current_version": resp.CurrentVersion,
+				"expect_version":  req.ExpectVersion,
+				"message":         "the config has been modified since you last read it; re-fetch and retry",
+			})
+			return
+		}
 		writeError(w, http.StatusInternalServerError, resp.Error.Error())
 		return
 	}
@@ -170,15 +181,17 @@ func (s *Server) adminDeleteConfig(w http.ResponseWriter, r *http.Request) {
 
 	operator := r.Header.Get("X-Operator")
 	comment := r.URL.Query().Get("comment")
+	expectVersion := parseUint64(r.URL.Query().Get("expect_version"))
 
 	oldValue := s.getCurrentValue(env, namespace, key)
 
 	cmd := &fsm.Command{
-		Type:        fsm.CmdDeleteConfig,
-		Namespace:   namespace,
-		Environment: env,
-		Key:         key,
-		Comment:     comment,
+		Type:          fsm.CmdDeleteConfig,
+		Namespace:     namespace,
+		Environment:   env,
+		Key:           key,
+		Comment:       comment,
+		ExpectVersion: expectVersion,
 	}
 
 	resp, err := s.node.Apply(cmd, 5*time.Second)
@@ -187,6 +200,15 @@ func (s *Server) adminDeleteConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if resp.Error != nil {
+		if resp.Error == fsm.ErrVersionConflict {
+			writeJSON(w, http.StatusConflict, map[string]interface{}{
+				"error":           "version conflict",
+				"current_version": resp.CurrentVersion,
+				"expect_version":  expectVersion,
+				"message":         "the config has been modified since you last read it; re-fetch and retry",
+			})
+			return
+		}
 		writeError(w, http.StatusInternalServerError, resp.Error.Error())
 		return
 	}
@@ -212,6 +234,7 @@ type RollbackReq struct {
 	Namespace     string `json:"namespace"`
 	Key           string `json:"key"`
 	TargetVersion uint64 `json:"target_version"`
+	ExpectVersion uint64 `json:"expect_version,omitempty"`
 	Operator      string `json:"operator"`
 }
 
@@ -249,13 +272,14 @@ func (s *Server) adminRollbackConfig(w http.ResponseWriter, r *http.Request) {
 	oldValue := s.getCurrentValue(req.Environment, req.Namespace, req.Key)
 
 	cmd := &fsm.Command{
-		Type:        fsm.CmdPutConfig,
-		Namespace:   req.Namespace,
-		Environment: req.Environment,
-		Key:         req.Key,
-		Value:       entry.Value,
-		UpdatedBy:   req.Operator,
-		Comment:     fmt.Sprintf("rollback to version %d", req.TargetVersion),
+		Type:          fsm.CmdPutConfig,
+		Namespace:     req.Namespace,
+		Environment:   req.Environment,
+		Key:           req.Key,
+		Value:         entry.Value,
+		UpdatedBy:     req.Operator,
+		Comment:       fmt.Sprintf("rollback to version %d", req.TargetVersion),
+		ExpectVersion: req.ExpectVersion,
 	}
 
 	resp, err := s.node.Apply(cmd, 5*time.Second)
@@ -264,6 +288,15 @@ func (s *Server) adminRollbackConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if resp.Error != nil {
+		if resp.Error == fsm.ErrVersionConflict {
+			writeJSON(w, http.StatusConflict, map[string]interface{}{
+				"error":           "version conflict",
+				"current_version": resp.CurrentVersion,
+				"expect_version":  req.ExpectVersion,
+				"message":         "the config has been modified since you last read it; re-fetch current version before rollback",
+			})
+			return
+		}
 		writeError(w, http.StatusInternalServerError, resp.Error.Error())
 		return
 	}
@@ -385,4 +418,12 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 
 func writeError(w http.ResponseWriter, status int, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+func parseUint64(s string) uint64 {
+	if s == "" {
+		return 0
+	}
+	v, _ := strconv.ParseUint(s, 10, 64)
+	return v
 }

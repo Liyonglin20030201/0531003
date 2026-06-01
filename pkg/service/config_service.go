@@ -108,13 +108,14 @@ func (s *ConfigServiceServer) PutConfig(ctx context.Context, req *pb.PutConfigRe
 	}
 
 	cmd := &fsm.Command{
-		Type:        fsm.CmdPutConfig,
-		Namespace:   req.Namespace,
-		Environment: req.Environment.String(),
-		Key:         req.Key,
-		Value:       req.Value,
-		UpdatedBy:   req.UpdatedBy,
-		Comment:     req.Comment,
+		Type:          fsm.CmdPutConfig,
+		Namespace:     req.Namespace,
+		Environment:   req.Environment.String(),
+		Key:           req.Key,
+		Value:         req.Value,
+		UpdatedBy:     req.UpdatedBy,
+		Comment:       req.Comment,
+		ExpectVersion: req.ExpectVersion,
 	}
 
 	resp, err := s.node.Apply(cmd, 5*time.Second)
@@ -122,6 +123,9 @@ func (s *ConfigServiceServer) PutConfig(ctx context.Context, req *pb.PutConfigRe
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	if resp.Error != nil {
+		if resp.Error == fsm.ErrVersionConflict {
+			return nil, status.Errorf(codes.Aborted, "version conflict: current_version=%d, expect_version=%d", resp.CurrentVersion, req.ExpectVersion)
+		}
 		return nil, status.Error(codes.Internal, resp.Error.Error())
 	}
 
@@ -174,11 +178,12 @@ func (s *ConfigServiceServer) DeleteConfig(ctx context.Context, req *pb.DeleteCo
 	}
 
 	cmd := &fsm.Command{
-		Type:        fsm.CmdDeleteConfig,
-		Namespace:   req.Namespace,
-		Environment: req.Environment.String(),
-		Key:         req.Key,
-		Comment:     req.Comment,
+		Type:          fsm.CmdDeleteConfig,
+		Namespace:     req.Namespace,
+		Environment:   req.Environment.String(),
+		Key:           req.Key,
+		Comment:       req.Comment,
+		ExpectVersion: req.ExpectVersion,
 	}
 
 	resp, err := s.node.Apply(cmd, 5*time.Second)
@@ -186,6 +191,9 @@ func (s *ConfigServiceServer) DeleteConfig(ctx context.Context, req *pb.DeleteCo
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	if resp.Error != nil {
+		if resp.Error == fsm.ErrVersionConflict {
+			return nil, status.Errorf(codes.Aborted, "version conflict: current_version=%d, expect_version=%d", resp.CurrentVersion, req.ExpectVersion)
+		}
 		return nil, status.Error(codes.Internal, resp.Error.Error())
 	}
 
@@ -302,13 +310,14 @@ func (s *ConfigServiceServer) RollbackConfig(ctx context.Context, req *pb.Rollba
 	}
 
 	cmd := &fsm.Command{
-		Type:        fsm.CmdPutConfig,
-		Namespace:   req.Namespace,
-		Environment: req.Environment.String(),
-		Key:         req.Key,
-		Value:       entry.Value,
-		UpdatedBy:   req.UpdatedBy,
-		Comment:     fmt.Sprintf("rollback to version %d", req.TargetVersion),
+		Type:          fsm.CmdPutConfig,
+		Namespace:     req.Namespace,
+		Environment:   req.Environment.String(),
+		Key:           req.Key,
+		Value:         entry.Value,
+		UpdatedBy:     req.UpdatedBy,
+		Comment:       fmt.Sprintf("rollback to version %d", req.TargetVersion),
+		ExpectVersion: req.ExpectVersion,
 	}
 
 	resp, err := s.node.Apply(cmd, 5*time.Second)
@@ -316,6 +325,9 @@ func (s *ConfigServiceServer) RollbackConfig(ctx context.Context, req *pb.Rollba
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 	if resp.Error != nil {
+		if resp.Error == fsm.ErrVersionConflict {
+			return nil, status.Errorf(codes.Aborted, "version conflict: current_version=%d, expect_version=%d; config was modified after your read", resp.CurrentVersion, req.ExpectVersion)
+		}
 		return nil, status.Error(codes.Internal, resp.Error.Error())
 	}
 

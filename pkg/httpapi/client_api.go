@@ -149,18 +149,17 @@ func (s *Server) clientLongPoll(w http.ResponseWriter, r *http.Request) {
 
 	timeout := parseDuration(r.URL.Query().Get("timeout"), longpoll.DefaultTimeout)
 
-	update, err := s.pollHub.Subscribe(r.Context(), env, namespace, key, timeout)
+	result, err := s.pollHub.Subscribe(r.Context(), env, namespace, key, timeout)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	if update == nil {
-		w.WriteHeader(http.StatusNotModified)
-		return
+	if result.Changed {
+		writeJSON(w, http.StatusOK, result)
+	} else {
+		writeJSON(w, http.StatusNotModified, result)
 	}
-
-	writeJSON(w, http.StatusOK, update)
 }
 
 type LongPollMultiReq struct {
@@ -181,20 +180,13 @@ func (s *Server) clientLongPollMulti(w http.ResponseWriter, r *http.Request) {
 
 	timeout := parseDuration(req.Timeout, longpoll.DefaultTimeout)
 
-	updates, err := s.pollHub.SubscribeMulti(r.Context(), req.Keys, timeout)
+	result, err := s.pollHub.SubscribeMulti(r.Context(), req.Keys, timeout)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	if len(updates) == 0 {
-		w.WriteHeader(http.StatusNotModified)
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"updates": updates,
-	})
+	writeJSON(w, http.StatusOK, result)
 }
 
 // --- Helpers ---

@@ -92,6 +92,7 @@ message PutConfigRequest {
   string value = 4;
   string updated_by = 5;
   string comment = 6;
+  uint64 expect_version = 7;
 }
 
 message PutConfigResponse {
@@ -103,6 +104,7 @@ message DeleteConfigRequest {
   Environment environment = 2;
   string key = 3;
   string comment = 4;
+  uint64 expect_version = 5;
 }
 
 message DeleteConfigResponse {
@@ -151,6 +153,7 @@ message RollbackConfigRequest {
   string key = 3;
   uint64 target_version = 4;
   string updated_by = 5;
+  uint64 expect_version = 6;
 }
 
 message RollbackConfigResponse {

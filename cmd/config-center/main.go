@@ -84,8 +84,12 @@ func main() {
 
 	// HTTP server (Admin + Client APIs)
 	auditStore := audit.NewAuditStore(node.Store)
-	pollHub := longpoll.NewHub(node.FSM.Watchers())
-	httpServer := httpapi.NewServer(node, auditStore, pollHub)
+	pollHub := longpoll.NewHub(node.FSM.Watchers(), node.Store)
+	authCfg := &httpapi.AuthConfig{
+		AdminTokens: cfg.Auth.AdminTokens,
+		AppKeys:     cfg.Auth.AppKeys,
+	}
+	httpServer := httpapi.NewServer(node, auditStore, pollHub, authCfg)
 
 	httpLis, err := net.Listen("tcp", cfg.HTTPAddr)
 	if err != nil {
