@@ -75,12 +75,12 @@ func (s *ConfigSnapshot) Persist(sink raft.SnapshotSink) error {
 func (s *ConfigSnapshot) Release() {}
 
 func restoreFromSnapshot(s *store.RocksDBStore, rc io.Reader) error {
-	restoreDir := filepath.Join(s.DataDir(), "restore-tmp")
+	// Extract snapshot tar to a temporary directory next to the data dir
+	restoreDir := filepath.Join(filepath.Dir(s.DataDir()), "restore-tmp")
 	os.RemoveAll(restoreDir)
 	if err := os.MkdirAll(restoreDir, 0755); err != nil {
-		return err
+		return fmt.Errorf("create restore dir: %w", err)
 	}
-	defer os.RemoveAll(restoreDir)
 
 	tr := tar.NewReader(rc)
 	for {
@@ -89,7 +89,8 @@ func restoreFromSnapshot(s *store.RocksDBStore, rc io.Reader) error {
 			break
 		}
 		if err != nil {
-			return err
+			os.RemoveAll(restoreDir)
+			return fmt.Errorf("read tar header: %w", err)
 		}
 
 		target := filepath.Join(restoreDir, header.Name)
@@ -97,22 +98,32 @@ func restoreFromSnapshot(s *store.RocksDBStore, rc io.Reader) error {
 		switch header.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(target, 0755); err != nil {
+				os.RemoveAll(restoreDir)
 				return err
 			}
 		case tar.TypeReg:
 			if err := os.MkdirAll(filepath.Dir(target), 0755); err != nil {
+				os.RemoveAll(restoreDir)
 				return err
 			}
 			file, err := os.Create(target)
 			if err != nil {
+				os.RemoveAll(restoreDir)
 				return err
 			}
 			if _, err := io.Copy(file, tr); err != nil {
 				file.Close()
+				os.RemoveAll(restoreDir)
 				return err
 			}
 			file.Close()
 		}
+	}
+
+	// Close current DB, replace data directory with snapshot, reopen
+	if err := s.ReplaceFromDir(restoreDir); err != nil {
+		os.RemoveAll(restoreDir)
+		return fmt.Errorf("replace db from snapshot: %w", err)
 	}
 
 	return nil

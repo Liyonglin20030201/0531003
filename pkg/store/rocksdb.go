@@ -2,6 +2,7 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -147,4 +148,66 @@ func (s *RocksDBStore) Close() {
 		cfh.Destroy()
 	}
 	s.db.Close()
+}
+
+// ReplaceFromDir closes the current DB, removes the data directory,
+// moves newDataDir into its place, and reopens the DB. This is used
+// during snapshot restore to atomically swap in a new dataset.
+func (s *RocksDBStore) ReplaceFromDir(newDataDir string) error {
+	// 1. Close current DB and release all handles
+	s.ro.Destroy()
+	s.wo.Destroy()
+	for _, cfh := range s.cfhs {
+		cfh.Destroy()
+	}
+	s.db.Close()
+
+	// 2. Remove existing data directory
+	if err := os.RemoveAll(s.dataDir); err != nil {
+		return fmt.Errorf("remove old data dir: %w", err)
+	}
+
+	// 3. Move snapshot data into the data directory path
+	if err := os.Rename(newDataDir, s.dataDir); err != nil {
+		return fmt.Errorf("move snapshot to data dir: %w", err)
+	}
+
+	// 4. Reopen DB with all column families
+	if err := s.reopen(); err != nil {
+		return fmt.Errorf("reopen db after restore: %w", err)
+	}
+
+	return nil
+}
+
+func (s *RocksDBStore) reopen() error {
+	bbto := grocksdb.NewDefaultBlockBasedTableOptions()
+	bbto.SetBlockCache(grocksdb.NewLRUCache(256 * 1024 * 1024))
+	bbto.SetFilterPolicy(grocksdb.NewBloomFilter(10))
+
+	opts := grocksdb.NewDefaultOptions()
+	opts.SetBlockBasedTableFactory(bbto)
+	opts.SetCreateIfMissing(true)
+	opts.SetCreateIfMissingColumnFamilies(true)
+
+	cfOpts := make([]*grocksdb.Options, len(allColumnFamilies))
+	for i := range allColumnFamilies {
+		cfOpts[i] = grocksdb.NewDefaultOptions()
+	}
+
+	db, cfHandles, err := grocksdb.OpenDbColumnFamilies(opts, s.dataDir, allColumnFamilies, cfOpts)
+	if err != nil {
+		return err
+	}
+
+	cfhs := make(map[string]*grocksdb.ColumnFamilyHandle, len(allColumnFamilies))
+	for i, name := range allColumnFamilies {
+		cfhs[name] = cfHandles[i]
+	}
+
+	s.db = db
+	s.cfhs = cfhs
+	s.ro = grocksdb.NewDefaultReadOptions()
+	s.wo = grocksdb.NewDefaultWriteOptions()
+	return nil
 }
