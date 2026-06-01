@@ -47,6 +47,10 @@ func DefaultConfig() *NodeConfig {
 		SnapshotThreshold: 8192,
 		HeartbeatTimeout:  1000 * time.Millisecond,
 		ElectionTimeout:   1000 * time.Millisecond,
+		Auth: AuthConfig{
+			AdminTokens: []string{"admin-secret-token-change-me"},
+			AppKeys:     []string{"app-key-001", "app-key-002"},
+		},
 	}
 }
 

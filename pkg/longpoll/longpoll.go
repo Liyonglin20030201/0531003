@@ -104,11 +104,27 @@ func (h *Hub) SubscribeMulti(ctx context.Context, keys []WatchKey, timeout time.
 	}()
 
 	select {
-	case update := <-merged:
+	case first := <-merged:
+		updates := []*ConfigUpdate{first}
+		// drain any other updates that arrived simultaneously
+		for {
+			select {
+			case u := <-merged:
+				updates = append(updates, u)
+			default:
+				goto done
+			}
+		}
+	done:
+		versions := make(map[string]*VersionInfo, len(updates))
+		for _, u := range updates {
+			ck := u.Environment + ":" + u.Namespace + ":" + u.Key
+			versions[ck] = &VersionInfo{Version: u.Version, UpdatedAt: u.UpdatedAt}
+		}
 		return &MultiPollResult{
-			Changed: true,
-			Updates: []*ConfigUpdate{update},
-			Versions: h.buildMultiVersions(keys),
+			Changed:  true,
+			Updates:  updates,
+			Versions: versions,
 		}, nil
 	case <-ctx.Done():
 		return &MultiPollResult{
