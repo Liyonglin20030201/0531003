@@ -1,0 +1,16 @@
+node_id: node2
+raft_addr: "localhost:7001"
+grpc_addr: "localhost:8001"
+data_dir: "./data/node2"
+bootstrap: false
+
+peers:
+  - id: node1
+    address: "localhost:7000"
+  - id: node3
+    address: "localhost:7002"
+
+snapshot_interval: 120
+snapshot_threshold: 8192
+heartbeat_timeout: 1000ms
+election_timeout: 1000ms

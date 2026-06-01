@@ -1,0 +1,185 @@
+syntax = "proto3";
+
+package config_service;
+
+option go_package = "github.com/YonglinLi/config-center/proto/config_service";
+
+import "google/protobuf/timestamp.proto";
+
+service ConfigService {
+  // Namespace management
+  rpc CreateNamespace(CreateNamespaceRequest) returns (CreateNamespaceResponse);
+  rpc ListNamespaces(ListNamespacesRequest) returns (ListNamespacesResponse);
+  rpc DeleteNamespace(DeleteNamespaceRequest) returns (DeleteNamespaceResponse);
+
+  // Configuration CRUD
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+  rpc PutConfig(PutConfigRequest) returns (PutConfigResponse);
+  rpc DeleteConfig(DeleteConfigRequest) returns (DeleteConfigResponse);
+  rpc ListConfigs(ListConfigsRequest) returns (ListConfigsResponse);
+
+  // Version management
+  rpc GetConfigVersion(GetConfigVersionRequest) returns (GetConfigVersionResponse);
+  rpc ListConfigVersions(ListConfigVersionsRequest) returns (ListConfigVersionsResponse);
+  rpc RollbackConfig(RollbackConfigRequest) returns (RollbackConfigResponse);
+
+  // Watch
+  rpc WatchConfig(WatchConfigRequest) returns (stream WatchConfigResponse);
+
+  // Cluster info
+  rpc ClusterStatus(ClusterStatusRequest) returns (ClusterStatusResponse);
+}
+
+enum Environment {
+  ENV_UNSPECIFIED = 0;
+  ENV_DEV = 1;
+  ENV_STAGING = 2;
+  ENV_PROD = 3;
+}
+
+message ConfigItem {
+  string key = 1;
+  string value = 2;
+  Environment environment = 3;
+  string namespace = 4;
+  uint64 version = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+  string updated_by = 8;
+  string comment = 9;
+}
+
+// Namespace
+message CreateNamespaceRequest {
+  string name = 1;
+  string description = 2;
+}
+
+message CreateNamespaceResponse {
+  bool success = 1;
+}
+
+message ListNamespacesRequest {}
+
+message ListNamespacesResponse {
+  repeated string namespaces = 1;
+}
+
+message DeleteNamespaceRequest {
+  string name = 1;
+}
+
+message DeleteNamespaceResponse {
+  bool success = 1;
+}
+
+// Config CRUD
+message GetConfigRequest {
+  string namespace = 1;
+  Environment environment = 2;
+  string key = 3;
+  uint64 version = 4;
+}
+
+message GetConfigResponse {
+  ConfigItem item = 1;
+}
+
+message PutConfigRequest {
+  string namespace = 1;
+  Environment environment = 2;
+  string key = 3;
+  string value = 4;
+  string updated_by = 5;
+  string comment = 6;
+}
+
+message PutConfigResponse {
+  uint64 version = 1;
+}
+
+message DeleteConfigRequest {
+  string namespace = 1;
+  Environment environment = 2;
+  string key = 3;
+  string comment = 4;
+}
+
+message DeleteConfigResponse {
+  bool success = 1;
+}
+
+message ListConfigsRequest {
+  string namespace = 1;
+  Environment environment = 2;
+  string prefix = 3;
+  int32 limit = 4;
+  string page_token = 5;
+}
+
+message ListConfigsResponse {
+  repeated ConfigItem items = 1;
+  string next_page_token = 2;
+}
+
+// Version management
+message GetConfigVersionRequest {
+  string namespace = 1;
+  Environment environment = 2;
+  string key = 3;
+  uint64 version = 4;
+}
+
+message GetConfigVersionResponse {
+  ConfigItem item = 1;
+}
+
+message ListConfigVersionsRequest {
+  string namespace = 1;
+  Environment environment = 2;
+  string key = 3;
+  int32 limit = 4;
+}
+
+message ListConfigVersionsResponse {
+  repeated ConfigItem versions = 1;
+}
+
+message RollbackConfigRequest {
+  string namespace = 1;
+  Environment environment = 2;
+  string key = 3;
+  uint64 target_version = 4;
+  string updated_by = 5;
+}
+
+message RollbackConfigResponse {
+  uint64 new_version = 1;
+}
+
+// Watch
+message WatchConfigRequest {
+  string namespace = 1;
+  Environment environment = 2;
+  string key = 3;
+}
+
+message WatchConfigResponse {
+  ConfigItem item = 1;
+  string event_type = 2;
+}
+
+// Cluster
+message ClusterStatusRequest {}
+
+message ClusterStatusResponse {
+  string leader_id = 1;
+  string leader_address = 2;
+  repeated NodeInfo nodes = 3;
+}
+
+message NodeInfo {
+  string id = 1;
+  string address = 2;
+  string state = 3;
+}

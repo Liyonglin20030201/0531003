@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package raft_transport;
+
+option go_package = "github.com/YonglinLi/config-center/proto/raft_transport";
+
+service RaftTransport {
+  rpc AppendEntries(AppendEntriesRequest) returns (AppendEntriesResponse);
+  rpc RequestVote(RequestVoteRequest) returns (RequestVoteResponse);
+  rpc TimeoutNow(TimeoutNowRequest) returns (TimeoutNowResponse);
+  rpc InstallSnapshot(stream InstallSnapshotRequest) returns (InstallSnapshotResponse);
+  rpc AppendEntriesPipeline(stream AppendEntriesRequest) returns (stream AppendEntriesResponse);
+}
+
+message Log {
+  uint64 index = 1;
+  uint64 term = 2;
+  uint32 type = 3;
+  bytes  data = 4;
+  bytes  extensions = 5;
+  int64  appended_at = 6;
+}
+
+message AppendEntriesRequest {
+  bytes  leader = 1;
+  uint64 term = 2;
+  uint64 prev_log_entry = 3;
+  uint64 prev_log_term = 4;
+  repeated Log entries = 5;
+  uint64 leader_commit_index = 6;
+}
+
+message AppendEntriesResponse {
+  uint64 term = 1;
+  uint64 last_log = 2;
+  bool   success = 3;
+  bool   no_retry_backoff = 4;
+}
+
+message RequestVoteRequest {
+  bytes  candidate = 1;
+  uint64 term = 2;
+  uint64 last_log_index = 3;
+  uint64 last_log_term = 4;
+  bool   leadership_transfer = 5;
+}
+
+message RequestVoteResponse {
+  uint64 term = 1;
+  bool   granted = 2;
+}
+
+message TimeoutNowRequest {
+  bytes leader = 1;
+}
+
+message TimeoutNowResponse {}
+
+message InstallSnapshotRequest {
+  bytes  leader = 1;
+  uint64 term = 2;
+  uint64 last_log_index = 3;
+  uint64 last_log_term = 4;
+  bytes  configuration = 5;
+  uint64 configuration_index = 6;
+  int64  size = 7;
+  bytes  data = 8;
+}
+
+message InstallSnapshotResponse {
+  uint64 term = 1;
+  bool   success = 2;
+}

@@ -1,0 +1,64 @@
+version: "3.8"
+
+services:
+  node1:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command:
+      - "--id=node1"
+      - "--raft-addr=node1:7000"
+      - "--grpc-addr=0.0.0.0:8000"
+      - "--data-dir=/data"
+      - "--bootstrap"
+    ports:
+      - "8000:8000"
+    volumes:
+      - node1-data:/data
+    networks:
+      - raft-net
+
+  node2:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command:
+      - "--id=node2"
+      - "--raft-addr=node2:7000"
+      - "--grpc-addr=0.0.0.0:8000"
+      - "--data-dir=/data"
+    ports:
+      - "8001:8000"
+    volumes:
+      - node2-data:/data
+    networks:
+      - raft-net
+    depends_on:
+      - node1
+
+  node3:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    command:
+      - "--id=node3"
+      - "--raft-addr=node3:7000"
+      - "--grpc-addr=0.0.0.0:8000"
+      - "--data-dir=/data"
+    ports:
+      - "8002:8000"
+    volumes:
+      - node3-data:/data
+    networks:
+      - raft-net
+    depends_on:
+      - node1
+
+volumes:
+  node1-data:
+  node2-data:
+  node3-data:
+
+networks:
+  raft-net:
+    driver: bridge
